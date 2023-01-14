@@ -1,0 +1,137 @@
+/*电子信息工程  明义
+ * rc522接线        舵机mg90s         0.96oled
+ * 3.3v-3.3v         黄色-8                 GND-GND
+ * RST-9             红色-5v                VCC-5V
+ * GND-GND           褐色-GND               SCL-A4
+ * MISO-12                                  SDA-A5
+ * MOSI-11
+ * SCK-13
+ * SDA-10
+ * 要加入库SSD1306,GFX,BusIO，
+ */
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <MFRC522.h>
+#include <Servo.h>
+#define SS_PIN 10
+#define RST_PIN 9
+#define OLED_RESET 2
+#define LED 13
+Adafruit_SSD1306 display(128,64,&Wire,OLED_RESET);
+MFRC522 rfid(SS_PIN, RST_PIN); 
+byte nuidPICC[4];
+Servo myservo;
+void setup() 
+{
+  Serial.begin(9600);
+  SPI.begin();
+  rfid.PCD_Init(); 
+  Wire.begin();
+  display.begin(SSD1306_SWITCHCAPVCC,0x3C);
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextSize(1);
+  display.setCursor(0,20);
+  display.print("please slot your card");
+  display.setCursor(0,30);
+  display.print("your cardID:");
+  display.display();
+  digitalWrite(5, LOW);
+  myservo.attach(8);
+  myservo.write(0);
+}
+//hex
+void printHex(byte *buffer, byte bufferSize)
+{
+for (byte i = 0; i < bufferSize; i++)
+  {
+Serial.print(buffer[i] < 0x10 ? " 0" : "");
+Serial.print(buffer[i], HEX);
+  }
+}
+//dec
+void printDec(byte *buffer, byte bufferSize)
+{
+for (byte i = 0; i < bufferSize; i++) {
+Serial.print(buffer[i] < 0x10 ? " 0" : "");
+Serial.print(buffer[i], DEC);
+}
+if(nuidPICC[0]==0x0E&& nuidPICC[1]==0xD2 && nuidPICC[2]==0x32 && nuidPICC[3]==0xF4)// 卡号ID
+{
+  myservo.write(180); 
+ Serial.print("\n welcome pmy");
+
+ }
+  else if (nuidPICC[0]==0x70&& nuidPICC[1]==0x08 && nuidPICC[2]==0x46 && nuidPICC[3]==0x2B)
+{
+  myservo.write(180); 
+ Serial.print("\n welcome pmy");
+  }
+  else if (nuidPICC[0]==0xE7&& nuidPICC[1]==0xCB && nuidPICC[2]==0x30 && nuidPICC[3]==0xE0)
+{
+  myservo.write(180); 
+ Serial.print("\n welcome pmy");
+  }
+}
+void loop()
+{
+  if ( ! rfid.PICC_IsNewCardPresent())
+return;
+  if ( ! rfid.PICC_ReadCardSerial())
+return;
+MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak); // 将NUID保存到nuidPICC数组
+for (byte i = 0; i < 4; i++)
+  {
+nuidPICC[i] = rfid.uid.uidByte[i];
+  }
+  Serial.print("十六进制UID：");
+printHex(rfid.uid.uidByte, rfid.uid.size); //Hex:16进制
+Serial.println();
+Serial.print("十进制UID：");
+printDec(rfid.uid.uidByte, rfid.uid.size); //Dec:10进制
+Serial.println();
+// 使放置在读卡区的IC卡进入休眠状态，不再重复读卡，Halt(停止)
+rfid.PICC_HaltA();
+// 停止读卡模块编码
+rfid.PCD_StopCrypto1();
+if(nuidPICC[0]==0x70&& nuidPICC[1]==0x08 && nuidPICC[2]==0x46 && nuidPICC[3]==0x2B)
+  {
+   display.clearDisplay();  
+   display.setCursor(0,20);
+   display.print("Welcome back!");
+   display.setCursor(0,30);
+   display.print("your cardID:");
+   display.print("7008462B");
+   display.display();
+    }
+  else if (nuidPICC[0]==0x0E&& nuidPICC[1]==0xD2 && nuidPICC[2]==0x32 && nuidPICC[3]==0xF4)
+  {
+   display.clearDisplay();
+   display.setCursor(0,20);
+   display.print("Welcome back!"); 
+   display.setCursor(0,30);
+   display.print("your cardID:");   
+   display.print("0ED232F4");
+   display.display();
+    }
+   else if (nuidPICC[0]==0xE7&& nuidPICC[1]==0xCB && nuidPICC[2]==0x30 && nuidPICC[3]==0xE0)
+   {
+    display.clearDisplay();
+    display.setCursor(0,20);
+    display.print("Welcome back!");
+    display.setCursor(0,30);
+    display.print("your cardID:");
+    display.print("E7CB30E0");
+    display.display();
+     }
+    delay(3000);
+    display.clearDisplay();
+    display.setCursor(0,20);
+    display.print("please slot your card");
+    display.setCursor(0,30);
+    display.print("your cardID:");
+    display.display();
+    myservo.write(0);
+}
