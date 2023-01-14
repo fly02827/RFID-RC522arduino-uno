@@ -1,0 +1,131 @@
+/**
+ /*程序 RC522读写IC卡程序
+ *作者：兔子
+  效果：可以读出IC卡的一个字节的数据，并可改写这个数据
+  时间：19.04.22
+ *
+ *
+ * RST/Reset   RST     -->       Arduino 9
+ * SPI SS      SDA(SS) -->       Arduino 10 
+ * SPI MOSI    MOSI    -->       Arduino 11
+ * SPI MISO    MISO    -->       Arduino 12 
+ * SPI SCK     SCK     -->       Arduino 13 
+ */
+
+#include <SPI.h>
+#include <MFRC522.h>
+
+#define RST_PIN         9           // Configurable, see typical pin layout above
+#define SS_PIN          10          // Configurable, see typical pin layout above
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance.
+
+MFRC522::MIFARE_Key key;
+String incomingByte = "";   // for incoming serial data
+
+byte sector         = 1;
+byte blockAddr      = 4;
+byte dataBlock[]    = {
+    0x01, 0x02, 0x03, 0x04, //  1,  2,   3,  4,
+    0x05, 0x06, 0x07, 0x08, //  5,  6,   7,  8,
+    0x09, 0x0a, 0xff, 0x0b, //  9, 10, 255, 11,
+    0x0c, 0x0d, 0x0e, 0x0f  // 12, 13, 14, 15
+};
+
+byte trailerBlock   = 7;
+MFRC522::StatusCode status;
+byte buffer[18];
+byte size = sizeof(buffer);
+
+/**
+ * Initialize.
+ */
+void setup() {
+    Serial.begin(9600); // 初始化串口，设置波特率为9600
+    while (!Serial);    // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
+    SPI.begin();        // 初始化SPI总线，用来和射频卡芯片RC522通信
+    mfrc522.PCD_Init(); // 初始化射频卡芯片RC522
+
+    // 准备射频卡的A区和B区密码，出厂值为6个0xFF。即FFFFFFFFFFFF
+    for (byte i = 0; i < 6; i++) {
+        key.keyByte[i] = 0xFF;
+    }
+
+    Serial.println("欢迎使用樊黎射频卡充值业务");
+}
+
+/**
+ * Main loop.
+ */
+void loop() {
+    // Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
+    if ( ! mfrc522.PICC_IsNewCardPresent())  //
+        return;
+
+    // Select one of the cards
+    if ( ! mfrc522.PICC_ReadCardSerial())
+        return;
+    
+    // Authenticate using key A
+    Serial.println("正在认证射频卡...");
+    //射频卡读操作，需要用A密码认证
+    status = (MFRC522::StatusCode) mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailerBlock, &key, &(mfrc522.uid));
+    if (status != MFRC522::STATUS_OK) {
+        Serial.print("认证失败，密码不对");
+        return;
+    }
+
+    // Show the whole sector as it currently is
+    Serial.print("卡内余额:");
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(4,buffer,&size);
+    if (status != MFRC522::STATUS_OK) {
+      Serial.println("数据读取错误");
+      return;
+    }
+    Serial.print(buffer[0]);
+    Serial.println("元");
+ 
+    while(1)
+    {
+      while(Serial.available() > 0)          //等待输入，有输入后才会继续下一步
+      {
+        incomingByte += char(Serial.read());
+        delay(2);
+      }
+       if(incomingByte.length() > 0)    //判断数据长度是否大于0
+       {
+        //Serial.println(incomingByte);
+        if(incomingByte.toInt() == 0)  //将字符串转换为数字，如果充值金额需在1~255之间
+        {
+          Serial.println("充值金额请勿为0/请勿输入除数字外的其他字符");
+          }
+        else if(incomingByte.toInt() > 255)
+        {
+          Serial.println("充值金额请勿超过255");
+          }
+        else
+        {
+          Serial.print("正在充值:");
+          Serial.print(incomingByte);
+          Serial.println("元");
+
+          //验证B区的密码，写数据需要B区密码
+             status = (MFRC522::StatusCode) mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_B, trailerBlock, &key, &(mfrc522.uid));
+              if (status != MFRC522::STATUS_OK) {
+                  Serial.println("认证失败，密码不对");
+                  return;
+              }
+              dataBlock[0] = incomingByte.toInt();  //充值的数量，写入缓存
+            status = (MFRC522::StatusCode) mfrc522.MIFARE_Write(blockAddr, dataBlock, 16);
+            if (status != MFRC522::STATUS_OK) {
+                  Serial.println("充值失败");
+              }
+              else
+              {
+                Serial.println("充值成功");
+                }
+            }
+          }
+        incomingByte = "";              //接收数据完成，将接收数据缓存清空
+        }
+}
