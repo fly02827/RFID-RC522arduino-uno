@@ -51,7 +51,7 @@ void setup() {
         key.keyByte[i] = 0xFF;
     }
 
-    Serial.println("欢迎使用樊黎射频卡充值业务");
+    Serial.println("欢迎使用射频卡充值业务");
 }
 
 /**
